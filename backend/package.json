@@ -1,0 +1,14 @@
+{
+  "name": "english-chatbot-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "fuse.js": "^7.1.0",
+    "mysql2": "^3.14.1"
+  }
+}
