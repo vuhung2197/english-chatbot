@@ -87,6 +87,13 @@ export default function KnowledgeAdmin() {
         method: "POST",
         body: formData,
       });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        alert(data.error); // 👉 Show: "File đã được upload và huấn luyện trước đó."
+        return;
+      }
+
       const result = await res.json();
       alert(result.message || "Tải lên thành công");
       fetchList();
