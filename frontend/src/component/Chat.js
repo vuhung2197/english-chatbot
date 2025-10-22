@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import HelpGuide from './HelpGuide';
+import { useState, useEffect, useRef } from 'react';
 import ChatInputSuggest from './ChatInputSuggest';
 import CryptoJS from 'crypto-js';
 import ReactMarkdown from 'react-markdown';
@@ -11,12 +10,21 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 export default function Chat() {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState([]);
-  const [showGuide, setShowGuide] = useState(true);
   const [loading, setLoading] = useState(false);
   const [questionHistory, setQuestionHistory] = useState([]);
   const [showRecentModal, setShowRecentModal] = useState(false);
   const [showModelPopup, setShowModelPopup] = useState(false);
   const [model, setModel] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  // Auto scroll to bottom
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [history, loading]);
 
   // Render lần đầu tiên khi component mount
   useEffect(() => {
@@ -129,84 +137,301 @@ export default function Chat() {
 
 
   return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.92)',
-        borderRadius: '2em',
-        padding: '2em 2.5em',
-        maxWidth: 620,
-        boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)',
-        border: '1px solid #bcbcbc',
-        margin: '0 auto',
-        color: '#333',
-      }}
-    >
-      <div className='mb-3 flex items-center gap-2'>
-        <span className='text-sm text-gray-700'>🧠 Đang dùng:</span>
-        <strong className='text-blue-700 text-sm'>
-          {model?.name || 'Chưa chọn'}
-        </strong>
-        <button
-          onClick={() => setShowModelPopup(true)}
-          className='text-sm underline text-blue-600 hover:text-blue-800'
-        >
-          🔧 Đổi mô hình
-        </button>
-      </div>
-      <button onClick={() => setShowGuide(v => !v)}>
-        {showGuide ? 'Ẩn hướng dẫn' : 'Hiện hướng dẫn'}
-      </button>
-      {showGuide && <HelpGuide />}
-
-      {questionHistory.length > 0 && (
-        <button
-          style={{
-            marginTop: 16,
-            marginBottom: 16,
-            backgroundColor: '#2563eb',
-            color: 'white',
-            padding: '8px 16px',
-            border: 'none',
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      backgroundColor: '#f7f7f8',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      {/* Header */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderBottom: '1px solid #e5e7eb',
+        padding: '16px 24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            backgroundColor: '#10a37f',
             borderRadius: '8px',
-            cursor: 'pointer',
-          }}
-          onClick={() => setShowRecentModal(true)}
-        >
-          🕘 Xem câu hỏi gần đây
-        </button>
-      )}
-
-
-      {showRecentModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            zIndex: 999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-          }}
-        >
-          <div
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '16px'
+          }}>
+            AI
+          </div>
+          <div>
+            <h1 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#1f2937'
+            }}>
+              English Chatbot
+            </h1>
+            <p style={{
+              margin: 0,
+              fontSize: '14px',
+              color: '#6b7280'
+            }}>
+              {model ? `Model: ${model.name}` : 'Chọn model để bắt đầu'}
+            </p>
+          </div>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setShowRecentModal(true)}
             style={{
-              backgroundColor: '#fff',
-              width: '90%',
-              maxWidth: 800,
-              maxHeight: '80%',
-              overflowY: 'auto',
-              borderRadius: 12,
-              padding: '24px 32px',
-              position: 'relative',
-              boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+              backgroundColor: '#f3f4f6',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: '#374151',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
             }}
           >
-            <h2 style={{ marginTop: 0, color: '#222', marginBottom: 16 }}>
-              🕘 Câu hỏi & trả lời gần đây
+            📚 Lịch sử
+          </button>
+          
+          <button
+            onClick={() => setShowModelPopup(true)}
+            style={{
+              backgroundColor: '#10a37f',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            ⚙️ Model
+          </button>
+          
+          {history.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?')) {
+                  setHistory([]);
+                  localStorage.removeItem('chatbot_history');
+                  localStorage.removeItem('chatbot_cache');
+                  localStorage.removeItem('chatbot_selected_model');
+                }
+              }}
+              style={{
+                backgroundColor: '#ef4444',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              🗑️ Xóa
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Chat Messages */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px'
+      }}>
+        {history.length === 0 && !loading && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            textAlign: 'center',
+            color: '#6b7280'
+          }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '16px',
+              fontSize: '24px'
+            }}>
+              🤖
+            </div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Chào mừng đến với English Chatbot
+            </h2>
+            <p style={{ margin: 0, fontSize: '16px', maxWidth: '500px' }}>
+              Tôi có thể giúp bạn học tiếng Anh, trả lời câu hỏi và cung cấp thông tin. 
+              Hãy bắt đầu cuộc trò chuyện bằng cách gõ câu hỏi của bạn!
+            </p>
+          </div>
+        )}
+
+        {history.map((item, idx) => (
+          <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* User Message */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{
+                backgroundColor: '#10a37f',
+                color: 'white',
+                padding: '12px 16px',
+                borderRadius: '18px 18px 4px 18px',
+                maxWidth: '70%',
+                fontSize: '15px',
+                lineHeight: '1.5',
+                wordWrap: 'break-word'
+              }}>
+                {item.user}
+              </div>
+            </div>
+
+            {/* Bot Message */}
+            {item.bot && (
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <div style={{
+                  backgroundColor: '#ffffff',
+                  color: '#1f2937',
+                  padding: '12px 16px',
+                  borderRadius: '18px 18px 18px 4px',
+                  maxWidth: '70%',
+                  fontSize: '15px',
+                  lineHeight: '1.5',
+                  wordWrap: 'break-word',
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}>
+                  <ReactMarkdown>{item.bot}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Loading Message */}
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <div style={{
+              backgroundColor: '#ffffff',
+              color: '#1f2937',
+              padding: '12px 16px',
+              borderRadius: '18px 18px 18px 4px',
+              fontSize: '15px',
+              lineHeight: '1.5',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <div style={{
+                display: 'flex',
+                gap: '4px'
+              }}>
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  backgroundColor: '#10a37f',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.4s ease-in-out infinite'
+                }}></div>
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  backgroundColor: '#10a37f',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.4s ease-in-out infinite 0.2s'
+                }}></div>
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  backgroundColor: '#10a37f',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.4s ease-in-out infinite 0.4s'
+                }}></div>
+              </div>
+              <span>Đang suy nghĩ...</span>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderTop: '1px solid #e5e7eb',
+        padding: '16px 24px',
+        boxShadow: '0 -1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <ChatInputSuggest
+              value={input}
+              onChange={setInput}
+              onSend={sendChat}
+              disabled={loading}
+              placeholder="Nhập câu hỏi của bạn..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Questions Modal */}
+      {showRecentModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '600px',
+            maxHeight: '80%',
+            overflowY: 'auto',
+            position: 'relative',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+          }}>
+            <h2 style={{ marginTop: 0, color: '#1f2937', marginBottom: 16 }}>
+              📚 Lịch sử câu hỏi
             </h2>
 
             <button
@@ -218,12 +443,13 @@ export default function Chat() {
                 background: '#ef4444',
                 color: '#fff',
                 border: 'none',
-                borderRadius: 6,
+                borderRadius: '6px',
                 padding: '6px 12px',
                 cursor: 'pointer',
+                fontSize: '14px'
               }}
             >
-              Đóng
+              ✕ Đóng
             </button>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -340,116 +566,20 @@ export default function Chat() {
         </div>
       )}
 
-
-      {history.length > 0 && (
-        <button
-          onClick={() => {
-            if (
-              window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?')
-            ) {
-              setHistory([]);
-              localStorage.removeItem('chatbot_history');
-              localStorage.removeItem('chatbot_cache');
-              localStorage.removeItem('chatbot_selected_model');
-            }
-          }}
-          style={{
-            marginBottom: 12,
-            backgroundColor: '#f44336',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-          }}
-        >
-          🗑 Xóa toàn bộ lịch sử
-        </button>
-      )}
-
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1.5em' }}>
-        <ChatInputSuggest
-          value={input}
-          onChange={setInput}
-          onSend={sendChat}
-          disabled={loading}
-        />
-      </div>
-
-      <div
-        style={{
-          maxHeight: 340,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column-reverse',
-          gap: '1em',
-        }}
-      >
-        {loading && (
-          <div
-            style={{
-              textAlign: 'left',
-              color: '#999',
-              fontStyle: 'italic',
-              margin: '0.5em 0 0.5em 10px',
-            }}
-          >
-            <b>Bot:</b> <span>Đang trả lời...</span>
-          </div>
-        )}
-        {history.map((item, idx) => {
-          const time = new Date(item.createdAt).toLocaleString('vi-VN');
-          return (
-            <div key={idx}>
-              <div
-                style={{
-                  background: '#e4e7ff',
-                  color: '#35477d',
-                  alignSelf: 'flex-end',
-                  marginLeft: 'auto',
-                  padding: '8px 12px',
-                  borderRadius: '1em',
-                  marginBottom: 4,
-                  display: 'inline-block',
-                  maxWidth: '85%',
-                }}
-              >
-                <b>Bạn:</b> {item.user}
-                <div style={{ fontSize: '0.8em', color: '#999', marginTop: 4 }}>
-                  {time}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: '#e2fcfa',
-                  color: '#24637c',
-                  alignSelf: 'flex-start',
-                  marginRight: 'auto',
-                  padding: '8px 12px',
-                  borderRadius: '1em',
-                  marginBottom: 4,
-                  display: 'inline-block',
-                  maxWidth: '85%',
-                  whiteSpace: 'normal',
-                  fontSize: '1.06em',
-                }}
-              >
-                <b>Bot:</b>
-                <div style={{ marginTop: 4 }}>
-                  <ReactMarkdown>{item.bot}</ReactMarkdown>
-                </div>
-                <div style={{ fontSize: '0.8em', color: '#999', marginTop: 4 }}>
-                  {time}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
+      {/* Model Selection Modal */}
       {showModelPopup && (
-        <div className='fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50'>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
           <ModelManager
             onSelectModel={m => {
               setModel(m);
@@ -460,6 +590,18 @@ export default function Chat() {
           />
         </div>
       )}
+
+      {/* CSS for animations */}
+      <style>{`
+        @keyframes pulse {
+          0%, 80%, 100% {
+            opacity: 0.3;
+          }
+          40% {
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 }
