@@ -4,10 +4,7 @@ import { retrieveTopChunks } from '../services/rag_retrieve.js';
 import { hashQuestion } from '../utils/hash.js';
 import { StatusCodes } from 'http-status-codes';
 import '../bootstrap/env.js';
-import OpenAI from 'openai';
 import axios from 'axios';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /**
  * Chuyển đổi văn bản AI trả lời thành Markdown giống ChatGPT.
@@ -132,7 +129,22 @@ export async function chat(req, res) {
       );
     }
 
-    res.json({ reply: toMarkdown(reply) });
+    res.json({ 
+      reply: toMarkdown(reply),
+      chunks_used: chunks.map(c => ({
+        id: c.id,
+        title: c.title,
+        content: c.content.substring(0, 200) + (c.content.length > 200 ? '...' : ''),
+        score: c.score,
+        source: c.source || 'unknown'
+      })),
+      metadata: {
+        total_chunks: chunks.length,
+        processing_time: t1 - t0,
+        model_used: model.name || 'gpt-4o',
+        context_length: context.length
+      }
+    });
   } catch (err) {
     console.error('❌ Lỗi xử lý:', err);
     res.json({ reply: 'Bot đang bận, vui lòng thử lại sau!' });
@@ -246,60 +258,6 @@ export async function deleteHistoryItem(req, res) {
 // ==================== FUNCTIONS FROM RULES.JS ====================
 
 /**
- * Dịch từng từ trong câu tiếng Anh sang tiếng Việt.
- * - Tách câu thành từng từ, loại bỏ dấu câu.
- * - Dịch từng từ riêng biệt bằng hàm translateSingleWord.
- * - Trả về mảng các object dạng { en, vi } cho từng từ đã dịch.
- * - Loại bỏ các từ không dịch được hoặc không có nghĩa tiếng Việt.
- * @param {string} sentence - Câu tiếng Anh cần dịch từng từ
- * @returns {Promise<Array<{en: string, vi: string}>>} - Mảng các từ và nghĩa tiếng Việt
- */
-export async function translateWordByWord(sentence) {
-  const words = sentence
-    .replace(/[.,!?;:()"]/g, '')
-    .split(/\s+/)
-    .filter(Boolean);
-
-  const translations = await Promise.all(
-    words.map(async (word) => {
-      let vi = await translateSingleWord(word.toLowerCase());
-      vi = vi.replace(/[^a-zA-ZÀ-ỹà-ỹ0-9\s]/g, '').trim();
-      return { en: word, vi };
-    })
-  );
-
-  return translations.filter((item) => item.vi && item.vi.length > 0);
-}
-
-/**
- * Dịch một từ hoặc một câu tiếng Anh sang tiếng Việt sử dụng OpenAI GPT.
- * - Nếu là một từ, chỉ trả về bản dịch ngắn gọn, không giải thích.
- * - Nếu là một câu, dịch tự nhiên, rõ nghĩa, không thêm chú thích.
- * @param {string} word - Từ hoặc câu tiếng Anh cần dịch
- * @returns {Promise<string>} - Nghĩa tiếng Việt hoặc "(lỗi)" nếu thất bại
- */
-export async function translateSingleWord(word) {
-  const isWord = /^[\p{L}\p{N}]+$/u.test(word.trim());
-
-  const prompt = isWord
-    ? `Bạn hãy dịch từ tiếng Anh '${word}' sang tiếng Việt. Vui lòng chỉ trả về bản dịch tiếng Việt tự nhiên và ngắn gọn, không kèm thêm giải thích.`
-    : `Bạn hãy dịch câu tiếng Anh sau sang tiếng Việt một cách tự nhiên, rõ nghĩa và dễ hiểu: '${word}'. Vui lòng chỉ trả về phần dịch tiếng Việt, không thêm chú thích.`;
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 100,
-      temperature: 0.3,
-    });
-    return completion.choices[0].message.content.trim();
-  } catch (err) {
-    console.error('OpenAI error:', err.response ? err.response.data : err);
-    return '(lỗi)';
-  }
-}
-
-/**
  * Ẩn (mã hóa tạm thời) các thông tin nhạy cảm trong văn bản như số điện thoại, email, địa chỉ.
  * Thay thế các thông tin này bằng các placeholder (ví dụ: [PHONE_1], [EMAIL_2], ...).
  * Lưu lại mapping giữa placeholder và giá trị gốc để có thể khôi phục sau.
@@ -364,27 +322,67 @@ export async function callLLM(
   _temperature = 0.2,
   _maxTokens = 512
 ) {
-  const baseUrl = model?.url;
-  const nameModel = model?.name;
-  const temperatureModel = model?.temperature;
-  const maxTokensModel = model?.maxTokens;
+  // Validate model
+  if (!model || !model.url || !model.name) {
+    throw new Error('Invalid model configuration: missing url or name');
+  }
 
-  const response = await axios.post(
-    `${baseUrl}/chat/completions`,
-    {
-      model: nameModel,
-      messages,
-      temperature: temperatureModel,
-      max_tokens: maxTokensModel,
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
+  const baseUrl = model.url;
+  const nameModel = model.name;
+  
+  // Use temperature from model if available, otherwise use parameter
+  const temperatureModel = model.temperature !== undefined ? model.temperature : _temperature;
+  
+  // Use maxTokens from model if available, otherwise use parameter
+  const maxTokensModel = model.maxTokens !== undefined ? model.maxTokens : _maxTokens;
+
+  // Normalize URL - remove trailing slash if exists
+  const normalizedUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const fullUrl = `${normalizedUrl}/chat/completions`;
+
+  console.log('🔗 Calling LLM:', {
+    url: fullUrl,
+    model: nameModel,
+    temperature: temperatureModel,
+    max_tokens: maxTokensModel,
+    messages_count: messages.length
+  });
+
+  try {
+    const response = await axios.post(
+      fullUrl,
+      {
+        model: nameModel,
+        messages,
+        temperature: temperatureModel,
+        max_tokens: maxTokensModel,
       },
-    }
-  );
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 180000, // 3 minutes timeout for complex RAG
+      }
+    );
 
-  return response.data.choices[0].message.content.trim();
+    const content = response.data.choices[0].message.content.trim();
+    console.log('✅ LLM response received successfully');
+    return content;
+  } catch (error) {
+    console.error('❌ LLM call error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: fullUrl,
+      request_body: {
+        model: nameModel,
+        temperature: temperatureModel,
+        max_tokens: maxTokensModel,
+        messages_count: messages.length
+      }
+    });
+    throw new Error(`LLM API Error: ${error.message} - ${error.response?.data ? JSON.stringify(error.response.data) : ''}`);
+  }
 }
 
 /**
